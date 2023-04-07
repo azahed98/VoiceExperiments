@@ -9,11 +9,12 @@ from torchaudio.transforms import MelSpectrogram
 
 def adversarial_g_loss(features_stft_disc_G_x, features_wave_disc_G_x, lengths_stft, lengths_wave):
     wave_disc_names = lengths_wave.keys()
-    
+
     stft_loss = F.relu(1-features_stft_disc_G_x[-1]).sum(dim=3).squeeze()/lengths_stft[-1].squeeze()
     wave_loss = torch.cat([F.relu(1-features_wave_disc_G_x[key][-1]).sum(dim=2).squeeze()/lengths_wave[key][-1].squeeze() for key in wave_disc_names])
     loss = torch.cat([stft_loss, wave_loss]).mean()
     
+    # print("Adv Loss: ", stft_loss.mean().item(), wave_loss.mean().item(), loss.item())
     return loss
 
 def feature_loss(features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_wave, lengths_stft):
@@ -22,7 +23,7 @@ def feature_loss(features_stft_disc_x, features_wave_disc_x, features_stft_disc_
     stft_loss = torch.stack([((feat_x-feat_G_x).abs().sum(dim=-1)/lengths_stft[i].view(-1,1,1)).sum(dim=-1).sum(dim=-1) for i, (feat_x, feat_G_x) in enumerate(zip(features_stft_disc_x, features_stft_disc_G_x))], dim=1).mean(dim=1, keepdim=True)
     wave_loss = torch.stack([torch.stack([(feat_x-feat_G_x).abs().sum(dim=-1).sum(dim=-1)/lengths_wave[key][i] for i, (feat_x, feat_G_x) in enumerate(zip(features_wave_disc_x[key], features_wave_disc_G_x[key]))], dim=1) for key in wave_disc_names], dim=2).mean(dim=1)
     loss = torch.cat([stft_loss, wave_loss], dim=1).mean()
-    
+    # print("Feat Loss: ", stft_loss.mean().item(), wave_loss.mean().item(), loss.item())
     return loss
 
 def spectral_reconstruction_loss(x, G_x, sr, eps=1e-4, device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
@@ -36,7 +37,7 @@ def spectral_reconstruction_loss(x, G_x, sr, eps=1e-4, device=torch.device("cuda
         
         loss = (S_x-S_G_x).abs().sum() + alpha_s*(((torch.log(S_x.abs()+eps)-torch.log(S_G_x.abs()+eps))**2).sum(dim=-2)**0.5).sum()
         L += loss
-    
+    # print("Spec Loss: ", L.item())
     return L
 
 def adversarial_d_loss(features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_stft, lengths_wave):

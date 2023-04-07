@@ -26,6 +26,8 @@ class TensorBoardLogger:
         self.save_every_n_epochs = logging_cfg["save_every_n_epochs"]
         self.save_samples = logging_cfg["save_samples"]
         self.scalars = logging_cfg["scalars"]
+        if "samples" in logging_cfg:
+            self.sample_saving = logging_cfg["samples"]
 
         if not os.path.isdir(os.path.join(self.root, "checkpoints")):
             os.makedirs(os.path.join(self.root, "checkpoints"))
@@ -56,3 +58,5 @@ class TensorBoardLogger:
         if epoch % self.save_every_n_epochs == 0:
             path = os.path.join(self.root, "checkpoints/last.ckpt")
             save_model(epoch, model, path)
+        
+        

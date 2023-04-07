@@ -74,12 +74,13 @@ class SoundStream(nn.Module):
 
         G_x = self.forward(x)
 
-        s_x = torch.stft(x.squeeze(), n_fft=1024, hop_length=256, window=torch.hann_window(window_length=1024, device=device), return_complex=False).permute(0, 3, 1, 2)
+        s_x = torch.view_as_real(torch.stft(x.squeeze(), n_fft=1024, hop_length=256, window=torch.hann_window(window_length=1024, device=device), return_complex=True)).permute(0, 3, 1, 2)
         lengths_s_x = 1 + torch.div(lengths_x, 256, rounding_mode="floor")
-        s_G_x = torch.stft(G_x.squeeze(), n_fft=1024, hop_length=256, window=torch.hann_window(window_length=1024, device=device), return_complex=False).permute(0, 3, 1, 2)
+        s_G_x = torch.view_as_real(torch.stft(G_x.squeeze(), n_fft=1024, hop_length=256, window=torch.hann_window(window_length=1024, device=device), return_complex=True)).permute(0, 3, 1, 2)
         
         lengths_stft = self.stft_disc.features_lengths(lengths_s_x)
         lengths_wave = self.wave_disc.features_lengths(lengths_x)
+    
 
         # TODO: shape hacking
         G_x = G_x[:, :, :x.shape[2]]
@@ -90,13 +91,13 @@ class SoundStream(nn.Module):
         
         features_stft_disc_G_x = self.stft_disc(s_G_x)
         features_wave_disc_G_x = self.wave_disc(G_x)
-        
+
         loss_g = self.criterion_g(x, G_x, features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_wave, lengths_stft)
-        
+
         self.optimizer_g.zero_grad()
         loss_g.backward()
         self.optimizer_g.step()
-        
+
         features_stft_disc_x = self.stft_disc(s_x)
         features_wave_disc_x = self.wave_disc(x)
         
@@ -104,7 +105,7 @@ class SoundStream(nn.Module):
         features_wave_disc_G_x_det = self.wave_disc(G_x.detach())
         
         loss_d = self.criterion_d(features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x_det, features_wave_disc_G_x_det, lengths_stft, lengths_wave)
-                
+      
         self.optimizer_d.zero_grad()
         loss_d.backward()
         self.optimizer_d.step()
@@ -146,4 +147,4 @@ class SoundStream(nn.Module):
         
         loss_d = self.criterion_d(features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x_det, features_wave_disc_G_x_det, lengths_stft, lengths_wave)
     
-        return {"Loss_G": loss_g, "Loss_D": loss_d, "G_x": G_x}
+        return {"Loss_G": loss_g, "Loss_D": loss_d, "G_x": G_x, "x": x}

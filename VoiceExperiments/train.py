@@ -20,7 +20,7 @@ from torch.utils.tensorboard import SummaryWriter
 def collate_fn(batch):
     audios = [i[0].T for i in batch]
     # srs = [i[1] for i in batch]
-    lengths = torch.tensor([elem.shape[-1] for elem in audios])
+    lengths = torch.tensor([elem.shape[0] for elem in audios])
     return nn.utils.rnn.pad_sequence(audios, batch_first=True)[:,:, 0][:, None, :], lengths
 
 def main(args):

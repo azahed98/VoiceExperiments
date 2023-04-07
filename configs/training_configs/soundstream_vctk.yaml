@@ -9,6 +9,9 @@ logging:
   scalars:
     - "Loss_G"
     - "Loss_D"
+  samples:
+    "x" : "audio"
+    "G_x" : "audio"
 
 datasets:
   - 
