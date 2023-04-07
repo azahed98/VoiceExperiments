@@ -1,0 +1,34 @@
+BATCH_SIZE: 2
+max_epochs: -1 # -1 for no end
+
+logging:
+  root: 'training/ss_vctk'
+  monitor: "Loss_G"
+  save_every_n_epochs: 5 # -1 to just save the best and last
+  save_samples: 0 # Positive to save examples of generated samples also
+  scalars:
+    - "Loss_G"
+    - "Loss_D"
+
+datasets:
+  - 
+    name: vctk
+    val_split: 0.2
+    kwargs:
+      root: '/media/arshzahed/2tb/dev/data/VCTK/Dataset/'
+
+optimizers:
+  gen:
+    type: Adam
+    kwargs:
+      lr: 1.0e-4
+      betas: 
+        - 0.5
+        - 0.9
+  descrim:
+    type: Adam
+    kwargs:
+      lr: 1.0e-4
+      betas: 
+        - 0.5
+        - 0.9

@@ -1,9 +1,13 @@
-from setuptools import setup, find_namespace_packages
+from setuptools import setup, find_packages
 
 setup(
-    name="FineVC",
+    name='VoiceExperiments',
+    # py_modules=['VoiceExperiments'],
+    packages=find_packages(
+        include=["VoiceExperiments*"]
+    ),
     version='0.0.1',
-    description='Controllable pitch, phoneme, style, and identity in Voice Conversion.',
+    description='A set of data processing, model training, and inference tools for voice experiments',
     author='Arsh Zahed',
     instal_requires=[
         'numpy',
@@ -13,6 +17,7 @@ setup(
         'soundfile',
         'pytorch-lightning',
         'tensorboard',
+        'vector-quantize-pytorch'
     ],
     python_requires='>3.7'
 )

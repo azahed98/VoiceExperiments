@@ -1,0 +1,1 @@
+SPK_ID_KEY = "SPK_ID"

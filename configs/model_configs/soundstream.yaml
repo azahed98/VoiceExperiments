@@ -1,0 +1,12 @@
+name: SoundStream
+params:
+  sr: 48000
+  C: 1 
+  D: 1 
+  n_q: 1 
+  codebook_size: 1
+  W: 1024
+  H: 256
+  LAMBDA_ADV: 1
+  LAMBDA_FEAT: 100
+  LAMBDA_REC: 1
