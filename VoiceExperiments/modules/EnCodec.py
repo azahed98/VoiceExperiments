@@ -6,14 +6,26 @@ from torchaudio.transforms import MelSpectrogram
 from encodec.balancer import Balancer
 
 def adversarial_g_loss(logits):
-    return F.relu(1-logits).mean()
+    adv_loss = 0
+    for logit in logits:
+        adv_loss += F.relu(1-logit).sum(dim=3).squeeze().mean() # summing across frequency domain. Ideally use fully connected layer instead
+    return adv_loss
 
-def feature_loss(features_stft_disc_x, features_stft_disc_G_x,  lengths_stft):
+def feature_loss(features_multi_stft_disc_x, features_multi_stft_disc_G_x):
     # paper divides feature difference for descrim k and layer l by mean( || D_k^l (x) ||_1 ), not included here but not sure why its needed?
-    stft_loss = torch.stack([((feat_x-feat_G_x).abs().sum(dim=-1)/lengths_stft[i].view(-1,1,1)).sum(dim=-1).sum(dim=-1) for i, (feat_x, feat_G_x) in enumerate(zip(features_stft_disc_x, features_stft_disc_G_x))], dim=1)
+    # stft_loss = torch.stack([((feat_x-feat_G_x).abs().sum(dim=-1)/lengths_stft[i].view(-1,1,1)).sum(dim=-1).sum(dim=-1) for i, (feat_x, feat_G_x) in enumerate(zip(features_stft_disc_x, features_stft_disc_G_x))], dim=1)
+    
+    # || D_k^l(x) - D_k^l(xhat) ||_1
+    stft_loss = 0
+    for features_stft_disc_x, features_stft_disc_G_x in zip(features_multi_stft_disc_x, features_multi_stft_disc_G_x):
+        stft_loss += torch.stack([
+            (feat_x - feat_G_x).abs().sum(dim=-1) / feat_x.abs().sum(dim=-1).mean()
+            for i, (feat_x, feat_G_x) 
+            in enumerate(zip(features_stft_disc_x, features_stft_disc_G_x))
+        ]).sum()
 
-
-    return stft_loss.mean()
+    stft_loss /= (len(features_multi_stft_disc_G_x) * len(features_multi_stft_disc_G_x[0]))
+    return stft_loss
 
 def audio_reconstruction_loss(x, G_x):
     return (x -G_x).abs().sum()
@@ -33,42 +45,49 @@ def spectral_reconstruction_loss(x, G_x, sr, device=torch.device("cuda" if torch
 
     return L
 
-# class DumbBalancer:
-#     def __init__(self, weights):
-#         self.weights = weights
 
-#     def backward(self, losses, input):
-#         pass
-
-class EnCodecGenerativeLoss(nn.Module):
-    def __init__(self, lambda_t, lambda_f, lambda_g, lambda_feat, lambda_w=0):
+class EnCodecGenerativeLoss:
+    def __init__(self, sample_rate, lambda_t=0.1, lambda_f=1, lambda_g=3, lambda_feat=3, lambda_w=1):
         self.loss_weights = {
             'wav_recontruction' : lambda_t, 
             'spectral_recontruction' : lambda_f, 
             'adversarial' : lambda_g,
             'feature' : lambda_feat,
-            'vq_commitment' : lambda_w
         }
-        
+
+        self.lambda_w = lambda_w # commitment loss not part of balancer
+
         self.balancer = Balancer(
             self.loss_weights
         ) 
 
-    def backward(self, x, G_x, logits, features_stft_disc_x, features_stft_disc_G_x, sr, lengths_stft, commit_loss):
-        losses = {
-            'wav_recontruction' : audio_reconstruction_loss(x, G_x), 
-            'spectral_recontruction' : spectral_reconstruction_loss(x, G_x, sr), 
-            'adversarial' : adversarial_g_loss(logits),
-            'feature' : feature_loss(features_stft_disc_x, features_stft_disc_G_x,  lengths_stft),
-            'vq_commitment' : commit_loss
-        }
+        self.sample_rate = sample_rate
+
+    def backward(self, x, G_x, logits, features_stft_disc_x, features_stft_disc_G_x, commit_loss):
+        losses = self.get_losses(x, G_x, logits, features_stft_disc_x, features_stft_disc_G_x)
 
         self.balancer.backward(losses, x)
+        commit_loss = self.lambda_w * commit_loss
         
-def adversarial_d_loss(logits_x, logits_G_x, lengths_stft):
-    real_stft_loss = F.relu(1-logits_x) 
+        commit_loss.backward()
 
-    generated_stft_loss = F.relu(1+logits_G_x) 
+        return losses
+    
+    def get_losses(self, x, G_x, logits, features_stft_disc_x, features_stft_disc_G_x):
+        losses = {
+            'wav_recontruction' : audio_reconstruction_loss(x, G_x), 
+            'spectral_recontruction' : spectral_reconstruction_loss(x, G_x, self.sample_rate), 
+            'adversarial' : adversarial_g_loss(logits),
+            'feature' : feature_loss(features_stft_disc_x, features_stft_disc_G_x),
+        }
+        return losses
+    
+def adversarial_d_loss(logits_x, logits_G_x):
+    for logit in logits_x:
+        real_stft_loss = F.relu(1-logit).sum(dim=3).squeeze().mean()
+
+    for logit in logits_G_x:
+        generated_stft_loss = F.relu(1+logit).sum(dim=3).squeeze().mean()
 
     return real_stft_loss.mean() + generated_stft_loss.mean()
 

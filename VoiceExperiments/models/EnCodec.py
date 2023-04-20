@@ -18,10 +18,12 @@ from torch import nn
 
 from encodec import EncodecModel
 from encodec import quantization as qt
+from encodec.model import EncodedFrame
 from encodec.msstftd import MultiScaleSTFTDiscriminator
 import encodec.modules as m
 
-from VoiceExperiments.modules.losses import *
+from VoiceExperiments.modules.EnCodec import EnCodecGenerativeLoss, adversarial_d_loss
+from VoiceExperiments.models.base import get_optimizer
 
 class EnCodec(EncodecModel):
     def __init__(self, model_config, optimizer_configs=None):
@@ -61,12 +63,73 @@ class EnCodec(EncodecModel):
 
         self.msstftd_descrim = MultiScaleSTFTDiscriminator(**model_config["MultiScaleSTFTDiscriminator"]) # TODO: need any special parsing of args
         
-        
+        # TODO: Add layer at end of descrim for aggregating across freq domain
+        # self.num_stft_descrim = len(self.msstftd_descrim.n_ffts) # number of sub-descrims
+        # self.dmsstftd_descrim_fc = nn.ModuleList([
+        #     nn.Linear()
+        # ])
 
+        self.gen_loss_fn = EnCodecGenerativeLoss(self.sample_rate)
+
+        self.optimizer_g = get_optimizer(optimizer_configs["gen"])(
+            list(self.encoder.parameters()) + list(self.quantizer.parameters()) + list(self.decoder.parameters()),
+            **optimizer_configs["gen"]["kwargs"]
+        )
+
+        self.optimizer_d = get_optimizer(optimizer_configs["descrim"])(
+            list(self.msstftd_descrim.parameters()),
+            **optimizer_configs["descrim"]["kwargs"]
+        )
+        
+    def encode_verbose(self, x: torch.Tensor) -> tp.Tuple[tp.List[EncodedFrame], torch.Tensor]:
+        """Identital to encode but uses forward of the quantizer instead of 
+        encode, so as to get commitment loss for training
+        """
+        assert x.dim() == 3
+        _, channels, length = x.shape
+        assert channels > 0 and channels <= 2
+        segment_length = self.segment_length
+        if segment_length is None:
+            segment_length = length
+            stride = length
+        else:
+            stride = self.segment_stride  # type: ignore
+            assert stride is not None
+
+        encoded_frames: tp.List[EncodedFrame] = []
+        commit_losses = []
+        for offset in range(0, length, stride):
+            frame = x[:, :, offset: offset + segment_length]
+            quantized_result, scale = self._encode_frame_verbose(frame)
+            encoded_frames.append([quantized_result.codes, scale])
+            commit_losses.append(quantized_result.penalty)
+
+        return encoded_frames, torch.mean(torch.stack(commit_losses))
+    
+    def _encode_frame_verbose(self, x: torch.Tensor) -> EncodedFrame:
+        length = x.shape[-1]
+        duration = length / self.sample_rate
+        assert self.segment is None or duration <= 1e-5 + self.segment
+
+        if self.normalize:
+            mono = x.mean(dim=1, keepdim=True)
+            volume = mono.pow(2).mean(dim=2, keepdim=True).sqrt()
+            scale = 1e-8 + volume
+            x = x / scale
+            scale = scale.view(-1, 1)
+        else:
+            scale = None
+
+        emb = self.encoder(x)
+        quantized_result = self.quantizer(emb, self.frame_rate, self.bandwidth)
+        quantized_result.codes = quantized_result.codes.transpose(0,1)
+        # codes is [B, K, T], with T frames, K nb of codebooks.
+        return quantized_result, scale
+    
     def gen_step(self, x, lengths_x):
-        frames = self.encode(x)
+        frames, commit_loss = self.encode_verbose(x)
         G_x = self.decode(frames)[:, :, :x.shape[-1]]
-        return G_x, None
+        return G_x, commit_loss
         
 
     def train_step(self, batch):
@@ -77,14 +140,59 @@ class EnCodec(EncodecModel):
         x = x.to(device)
         lengths_x = lengths_x.to(device)
 
-        print(x.shape, self.sample_rate)
         G_x, commit_loss = self.gen_step(x, lengths_x)
         
+        logits_x, features_stft_disc_x = self.msstftd_descrim(x)
+        logits_G_x, features_stft_disc_G_x = self.msstftd_descrim(G_x)
         
+        self.optimizer_g.zero_grad()
+        losses_g = self.gen_loss_fn.backward(
+            x, 
+            G_x, 
+            logits_G_x, 
+            features_stft_disc_x, 
+            features_stft_disc_G_x, 
+            commit_loss
+        )
+        self.optimizer_g.step()
+        losses_g += {'commitment loss': commit_loss}
 
+        loss_d = adversarial_d_loss(logits_x, logits_G_x)
+        self.optimizer_d.zero_grad()
+        loss_d.backward()
+        self.optimizer_d.step()
+
+        losses = losses_g + {'descrim': loss_d}
+        return losses
         
     def eval_step(self, batch):
-        pass
+        self.train()
+        x, lengths_x = batch
+        device = next(self.parameters()).device
+
+        x = x.to(device)
+        lengths_x = lengths_x.to(device)
+
+        G_x, commit_loss = self.gen_step(x, lengths_x)
+        
+        logits_x, features_stft_disc_x = self.msstftd_descrim(x)
+        logits_G_x, features_stft_disc_G_x = self.msstftd_descrim(G_x)
+        
+        self.optimizer_g.zero_grad()
+        losses_g = self.gen_loss_fn.get_losses(
+            x, 
+            G_x, 
+            logits_G_x, 
+            features_stft_disc_x, 
+            features_stft_disc_G_x, 
+            commit_loss
+        )
+        losses_g += {'commitment loss': commit_loss}
+
+        loss_d = adversarial_d_loss(logits_x, logits_G_x)
+
+        losses = losses_g + {'descrim': loss_d}
+        return losses
 
     def get_loss_g(self, generated, truth):
         # Losses

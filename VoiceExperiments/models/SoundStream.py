@@ -94,7 +94,7 @@ class SoundStream(nn.Module):
         features_wave_disc_G_x = self.wave_disc(G_x)
 
         loss_g = self.criterion_g(x, G_x, features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_wave, lengths_stft)
-
+        
         self.optimizer_g.zero_grad()
         loss_g.backward()
         self.optimizer_g.step()
