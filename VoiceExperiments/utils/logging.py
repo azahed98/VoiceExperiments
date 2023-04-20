@@ -23,7 +23,9 @@ class TensorBoardLogger:
 
         self.root = logging_cfg["root"]
         self.monitor = logging_cfg["monitor"]
+        self.negate_monitor = ("negate_monitor" in logging_cfg ) and logging_cfg["negate_monitor"]
         self.save_every_n_epochs = logging_cfg["save_every_n_epochs"]
+        # self.save_every_n_steps = logging_cfg["save_every_n_steps"]
         self.save_samples = logging_cfg["save_samples"]
         self.scalars = logging_cfg["scalars"]
         if "samples" in logging_cfg:
@@ -43,10 +45,19 @@ class TensorBoardLogger:
 
 
     def log_val(self, results, epoch, step, model):
-        for scalar in self.scalars:
-            self.writer.add_scalar(f"val/{scalar}", results[scalar], step)
+        total_results = {scalar : 0  for scalar in self.scalars}
+        total_monitor = 0
+        for result in results:
+            for scalar in self.scalars:
+                total_results[scalar] += result[scalar]
+            total_monitor += result[self.monitor]
 
-        current_valid_loss = results[self.monitor]
+        for scalar in self.scalars:
+            self.writer.add_scalar(f"val/{scalar}", total_results[scalar] / len(results), step)
+
+        current_valid_loss = total_monitor / len(results )
+        if self.negate_monitor:
+            current_valid_loss *= -1
         
         if current_valid_loss < self.best_valid_loss:
             self.best_valid_loss = current_valid_loss
@@ -55,8 +66,8 @@ class TensorBoardLogger:
             path = os.path.join(self.root, "checkpoints/best.ckpt")
             save_model(epoch, model, path)
         
-        if epoch % self.save_every_n_epochs == 0:
-            path = os.path.join(self.root, "checkpoints/last.ckpt")
-            save_model(epoch, model, path)
+            if epoch % self.save_every_n_epochs == 0:
+                path = os.path.join(self.root, "checkpoints/last.ckpt")
+                save_model(epoch, model, path)
         
         

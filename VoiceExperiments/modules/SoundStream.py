@@ -146,6 +146,7 @@ class DecoderBlock(nn.Module):
     def forward(self, x):
         return self.layers(x)
 
+# TODO: FiLM currently not used
 class FiLMBlock(nn.Module):
     def __init__(self):
         super(FiLMBlock, self).__init__()

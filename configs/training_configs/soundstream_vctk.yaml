@@ -4,7 +4,7 @@ max_epochs: -1 # -1 for no end
 logging:
   root: 'training/ss_vctk'
   monitor: "Loss_G"
-  save_every_n_epochs: 5 # -1 to just save the best and last
+  save_every_n_epochs: 1 # -1 to just save the best and last
   save_samples: 0 # Positive to save examples of generated samples also
   scalars:
     - "Loss_G"
@@ -16,7 +16,7 @@ logging:
 datasets:
   - 
     name: vctk
-    val_split: 0.2
+    val_split: 0.1
     kwargs:
       root: '/media/arshzahed/2tb/dev/data/VCTK/Dataset/'
 

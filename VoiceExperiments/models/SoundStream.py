@@ -10,7 +10,7 @@ from VoiceExperiments.modules.SoundStream import *
 
 class SoundStream(nn.Module):
     # TODO: Add FiLM, add quantizer dropout
-    def __init__(self, model_config, optimizer_configs):
+    def __init__(self, model_config, optimizer_configs=None):
         super(SoundStream, self).__init__()
 
         params = model_config['params']
@@ -37,31 +37,32 @@ class SoundStream(nn.Module):
         )
         self.decoder = Decoder(C=C, D=D)
 
-        # Descriminator
-        self.wave_disc = WaveDiscriminator(num_D=D, downsampling_factor=2)
-        self.stft_disc = STFTDiscriminator(C=C, F_bins=W//2)
+        if optimizer_configs:
+            # Descriminator
+            self.wave_disc = WaveDiscriminator(num_D=D, downsampling_factor=2)
+            self.stft_disc = STFTDiscriminator(C=C, F_bins=W//2)
         
-        # Optimizers
-        self.optimizer_g = get_optimizer(optimizer_configs["gen"])(
-            list(self.encoder.parameters()) + list(self.quantizer.parameters()) + list(self.decoder.parameters()),
-            **optimizer_configs["gen"]["kwargs"]
-        )
+            # Optimizers
+            self.optimizer_g = get_optimizer(optimizer_configs["gen"])(
+                list(self.encoder.parameters()) + list(self.quantizer.parameters()) + list(self.decoder.parameters()),
+                **optimizer_configs["gen"]["kwargs"]
+            )
 
-        self.optimizer_d = get_optimizer(optimizer_configs["descrim"])(
-            list(self.wave_disc.parameters()) + list(self.stft_disc.parameters()),
-            **optimizer_configs["descrim"]["kwargs"]
-        )
+            self.optimizer_d = get_optimizer(optimizer_configs["descrim"])(
+                list(self.wave_disc.parameters()) + list(self.stft_disc.parameters()),
+                **optimizer_configs["descrim"]["kwargs"]
+            )
 
-        # Define losses
-        self.criterion_g = lambda x, G_x, features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_wave, lengths_stft: LAMBDA_ADV*adversarial_g_loss(features_stft_disc_G_x, features_wave_disc_G_x, lengths_stft, lengths_wave) + LAMBDA_FEAT*feature_loss(features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_wave, lengths_stft) + LAMBDA_REC*spectral_reconstruction_loss(x, G_x, self.sr)
-        self.criterion_d = adversarial_d_loss
+            # Define losses
+            self.criterion_g = lambda x, G_x, features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_wave, lengths_stft: LAMBDA_ADV*adversarial_g_loss(features_stft_disc_G_x, features_wave_disc_G_x, lengths_stft, lengths_wave) + LAMBDA_FEAT*feature_loss(features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_wave, lengths_stft) + LAMBDA_REC*spectral_reconstruction_loss(x, G_x, self.sr)
+            self.criterion_d = adversarial_d_loss
 
     def forward(self, x):
-        e = self.encoder(x)
-        e = torch.swapaxes(e, 1, 2)
-        quantized, _, _ = self.quantizer(e)
-        quantized = torch.swapaxes(quantized, 1, 2)
-        o = self.decoder(quantized)
+        e = self.encoder(x) # (B, S, D)
+        e = torch.swapaxes(e, 1, 2) # (B, D, S)
+        quantized, _, _ = self.quantizer(e) # (B, D, S)
+        quantized = torch.swapaxes(quantized, 1, 2) # (B, S, D)
+        o = self.decoder(quantized) # (B, 1, T)
         return o
   
     def train_step(self, batch):
@@ -109,6 +110,9 @@ class SoundStream(nn.Module):
         self.optimizer_d.zero_grad()
         loss_d.backward()
         self.optimizer_d.step()
+        
+        # print(torch.cuda.memory_summary())
+        # assert False
 
         return {"Loss_G": loss_g, "Loss_D": loss_d, "G_x": G_x}
     

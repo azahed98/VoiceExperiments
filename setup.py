@@ -17,7 +17,8 @@ setup(
         'soundfile',
         'pytorch-lightning',
         'tensorboard',
-        'vector-quantize-pytorch'
+        'vector-quantize-pytorch',
+        # 'encodec', # Required for EnCodec model
     ],
     python_requires='>3.7'
 )

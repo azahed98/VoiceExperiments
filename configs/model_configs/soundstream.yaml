@@ -1,10 +1,10 @@
 name: SoundStream
 params:
   sr: 48000
-  C: 1 
-  D: 1 
-  n_q: 1 
-  codebook_size: 1
+  C: 8 
+  D: 8 
+  n_q: 4 
+  codebook_size: 32
   W: 1024
   H: 256
   LAMBDA_ADV: 1

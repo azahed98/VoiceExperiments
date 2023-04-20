@@ -12,7 +12,7 @@ from VoiceExperiments.models import get_model#, get_optimizer
 from VoiceExperiments.dataset import get_datasets
 from VoiceExperiments.utils.logging import TensorBoardLogger
 
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 
 # TODO: Find appropriate place to integrate collate_fn
 #       may require writing custom replacement for ConcatDataset
@@ -21,10 +21,11 @@ def collate_fn(batch):
     audios = [i[0].T for i in batch]
     # srs = [i[1] for i in batch]
     lengths = torch.tensor([elem.shape[0] for elem in audios])
-    return nn.utils.rnn.pad_sequence(audios, batch_first=True)[:,:, 0][:, None, :], lengths
+    
+    # audios shape after padding: (batch, 1, L) the 1 is for num channels
+    return nn.utils.rnn.pad_sequence(audios, batch_first=True).permute(0, 2, 1), lengths
 
 def main(args):
-    writer = SummaryWriter()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     with open(args.model_config, 'r') as stream:
@@ -38,6 +39,9 @@ def main(args):
     opt_cfgs = training_cfg["optimizers"]
     model = get_model(model_cfg, opt_cfgs)
     model.to(device)
+    if args.compile:
+        model = torch.compile(model)
+
     BATCH_SIZE = training_cfg["BATCH_SIZE"]
 
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, num_workers=args.workers)
@@ -59,10 +63,11 @@ def main(args):
         # Val
         model.eval()
         
+        val_results = []
         for batch in tqdm(valid_loader):
-            results = model.eval_step(batch)
-            logger.log_val(results, epoch, step, model)
-            step += 1
+            val_results.append(model.eval_step(batch))
+            
+        logger.log_val(results, epoch, step, model)
 
         epoch += 1
 
@@ -72,7 +77,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_config', type=str)
     parser.add_argument('--training_config', type=str)
-    parser.add_argument('--workers', type=int, default=2)
+    parser.add_argument('--workers', type=int, default=8)
+    parser.add_argument('--compile', action="store_true")
 
     args = parser.parse_args()
     main(args)
