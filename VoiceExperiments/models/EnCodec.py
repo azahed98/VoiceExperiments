@@ -60,7 +60,8 @@ class EnCodec(EncodecModel):
 
 
         self.msstftd_descrim = MultiScaleSTFTDiscriminator(**model_config["MultiScaleSTFTDiscriminator"]) # TODO: need any special parsing of args
-
+        
+        
 
     def gen_step(self, x, lengths_x):
         frames = self.encode(x)
@@ -79,7 +80,7 @@ class EnCodec(EncodecModel):
         print(x.shape, self.sample_rate)
         G_x, commit_loss = self.gen_step(x, lengths_x)
         
-        loss_g = 
+        
 
         
     def eval_step(self, batch):
