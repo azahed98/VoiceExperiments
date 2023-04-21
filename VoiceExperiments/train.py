@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from VoiceExperiments.models import get_model#, get_optimizer
 from VoiceExperiments.dataset import get_datasets
-from VoiceExperiments.utils.logging import TensorBoardLogger
+from VoiceExperiments.utils.logging import TensorBoardLogger, tensor_dict_to_numpy, del_results
 
 # from torch.utils.tensorboard import SummaryWriter
 
@@ -48,27 +48,36 @@ def main(args):
     valid_loader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, num_workers=args.workers)
     
     logger = TensorBoardLogger(training_cfg['logging'], model_cfg=model_cfg, training_cfg=training_cfg)
+    clear_cache_every_n_steps = training_cfg['logging']['clear_cache_every_n_steps']
 
     epoch = 0
     step = 0
     while training_cfg["max_epochs"] <= 0 or training_cfg["max_epochs"] > epoch:
-        # Train
+        # # Train
         model.train()
         
         for batch in tqdm(train_loader):
             results = model.train_step(batch)
+            del_tensors = (clear_cache_every_n_steps > 0) and (step % clear_cache_every_n_steps == 0)
+            results = tensor_dict_to_numpy(results, del_tensors=del_tensors)
             logger.log_train(results, epoch, step, model)
             step += 1
-        
+        del_results(results)
         # Val
         model.eval()
         
         val_results = []
+        val_step = 0
         for batch in tqdm(valid_loader):
-            val_results.append(model.eval_step(batch))
-            
-        logger.log_val(results, epoch, step, model)
+            results = model.eval_step(batch)
+            del_tensors = (clear_cache_every_n_steps > 0) and (val_step % clear_cache_every_n_steps == 0)
+            results = tensor_dict_to_numpy(results, del_tensors=del_tensors)
+            val_results.append(results)
 
+            val_step += 1
+        del_results(results)
+        logger.log_val(val_results, epoch, step, model)
+        
         epoch += 1
 
     logging.info("Done training")  
@@ -77,7 +86,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_config', type=str)
     parser.add_argument('--training_config', type=str)
-    parser.add_argument('--workers', type=int, default=8)
+    parser.add_argument('--workers', type=int, default=2)
     parser.add_argument('--compile', action="store_true")
 
     args = parser.parse_args()

@@ -140,29 +140,41 @@ class EnCodec(EncodecModel):
         x = x.to(device)
         lengths_x = lengths_x.to(device)
 
+        self.optimizer_g.zero_grad()
+        self.optimizer_d.zero_grad()
+
+        # Generate
         G_x, commit_loss = self.gen_step(x, lengths_x)
         
+        # Discriminator
         logits_x, features_stft_disc_x = self.msstftd_descrim(x)
         logits_G_x, features_stft_disc_G_x = self.msstftd_descrim(G_x)
         
-        self.optimizer_g.zero_grad()
-        losses_g = self.gen_loss_fn.backward(
+        # Gen Loss
+        losses = self.gen_loss_fn.backward(
             x, 
             G_x, 
             logits_G_x, 
             features_stft_disc_x, 
             features_stft_disc_G_x, 
-            commit_loss
+            commit_loss,
+            list(self.parameters())
         )
         self.optimizer_g.step()
-        losses_g += {'commitment loss': commit_loss}
+        
+        losses.update({'commitment loss': commit_loss})
 
+        # Discriminator with detach
+        logits_x, features_stft_disc_x = self.msstftd_descrim(x.detach())
+        logits_G_x, features_stft_disc_G_x = self.msstftd_descrim(G_x.detach())
+        
+        # Discrim Loss
         loss_d = adversarial_d_loss(logits_x, logits_G_x)
-        self.optimizer_d.zero_grad()
+
         loss_d.backward()
         self.optimizer_d.step()
 
-        losses = losses_g + {'descrim': loss_d}
+        losses.update({'descriminator': loss_d})
         return losses
         
     def eval_step(self, batch):
@@ -179,30 +191,16 @@ class EnCodec(EncodecModel):
         logits_G_x, features_stft_disc_G_x = self.msstftd_descrim(G_x)
         
         self.optimizer_g.zero_grad()
-        losses_g = self.gen_loss_fn.get_losses(
+        losses = self.gen_loss_fn.get_losses(
             x, 
             G_x, 
             logits_G_x, 
             features_stft_disc_x, 
             features_stft_disc_G_x, 
-            commit_loss
         )
-        losses_g += {'commitment loss': commit_loss}
+        losses.update({'commitment loss': commit_loss})
 
         loss_d = adversarial_d_loss(logits_x, logits_G_x)
 
-        losses = losses_g + {'descrim': loss_d}
+        losses.update({'descriminator': loss_d})
         return losses
-
-    def get_loss_g(self, generated, truth):
-        # Losses
-        # - Reconstruction Loss (time and frequency)
-        # - Discriminative Loss
-        # - VQ Commitment loss
-        # - Balancer (not a loss, but a way of combining)
-        # Also need to consider multi-bandwidth training
-        #   note from paper: 
-        #       (for Multi STFT Descrim) descriminator tend to overpower easily the decoder
-        #       we update its weight with a probability of 2/3 at 24 kHz and 0.5 at 48 kHz
-
-        pass

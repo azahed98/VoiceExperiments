@@ -1,5 +1,7 @@
 import torch
 import os
+import gc
+
 # from yaml import Dump
 from torch.utils.tensorboard import SummaryWriter
 
@@ -12,6 +14,20 @@ def save_model(epochs, model, path):
                 'model_state_dict': model.state_dict(),
                 }, f'{path}')
     
+def del_results(results):
+    keys = list(results.keys())
+    for k in keys:
+        del results[k]
+    del results
+    gc.collect()
+    torch.cuda.empty_cache()
+
+def tensor_dict_to_numpy(results, del_tensors=False):
+    results_np = {key: value.detach().cpu().numpy() for key, value in results.items()}
+    if del_tensors:
+        del_results(results)
+    return results_np
+
 class TensorBoardLogger:
     """
     Class to save the best model while training. If the current epoch's 

@@ -28,7 +28,7 @@ def feature_loss(features_multi_stft_disc_x, features_multi_stft_disc_G_x):
     return stft_loss
 
 def audio_reconstruction_loss(x, G_x):
-    return (x -G_x).abs().sum()
+    return (x - G_x).abs().sum()
 
 def spectral_reconstruction_loss(x, G_x, sr, device=torch.device("cuda" if torch.cuda.is_available() else "cpu")):
     L = 0
@@ -47,10 +47,19 @@ def spectral_reconstruction_loss(x, G_x, sr, device=torch.device("cuda" if torch
 
 
 class EnCodecGenerativeLoss:
-    def __init__(self, sample_rate, lambda_t=0.1, lambda_f=1, lambda_g=3, lambda_feat=3, lambda_w=1):
+    def __init__(self, sample_rate, lambda_t=0.1, lambda_f=1, lambda_g=3, lambda_feat=3, lambda_w=1,):
+        # Losses
+        # - Reconstruction Loss (time and frequency)
+        # - Discriminative Loss
+        # - VQ Commitment loss
+        # - Balancer (not a loss, but a way of combining)
+        # Also need to consider multi-bandwidth training
+        #   note from paper: 
+        #       (for Multi STFT Descrim) descriminator tend to overpower easily the decoder
+        #       we update its weight with a probability of 2/3 at 24 kHz and 0.5 at 48 kHz
         self.loss_weights = {
             'wav_recontruction' : lambda_t, 
-            'spectral_recontruction' : lambda_f, 
+            'spectral_reconstruction' : lambda_f, 
             'adversarial' : lambda_g,
             'feature' : lambda_feat,
         }
@@ -63,10 +72,16 @@ class EnCodecGenerativeLoss:
 
         self.sample_rate = sample_rate
 
-    def backward(self, x, G_x, logits, features_stft_disc_x, features_stft_disc_G_x, commit_loss):
+    def backward(self, x, G_x, logits, features_stft_disc_x, features_stft_disc_G_x, commit_loss, params, use_balancer=True):
         losses = self.get_losses(x, G_x, logits, features_stft_disc_x, features_stft_disc_G_x)
 
-        self.balancer.backward(losses, x)
+        if use_balancer:
+            for param in params:
+                self.balancer.backward(losses, param)
+        else:
+            loss = sum([self.loss_weights[k] * losses[k] for k in losses])
+            loss.backward()
+        
         commit_loss = self.lambda_w * commit_loss
         
         commit_loss.backward()
@@ -76,7 +91,7 @@ class EnCodecGenerativeLoss:
     def get_losses(self, x, G_x, logits, features_stft_disc_x, features_stft_disc_G_x):
         losses = {
             'wav_recontruction' : audio_reconstruction_loss(x, G_x), 
-            'spectral_recontruction' : spectral_reconstruction_loss(x, G_x, self.sample_rate), 
+            'spectral_reconstruction' : spectral_reconstruction_loss(x, G_x, self.sample_rate), 
             'adversarial' : adversarial_g_loss(logits),
             'feature' : feature_loss(features_stft_disc_x, features_stft_disc_G_x),
         }
