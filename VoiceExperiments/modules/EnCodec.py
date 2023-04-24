@@ -72,7 +72,7 @@ class EnCodecGenerativeLoss:
 
         self.sample_rate = sample_rate
 
-    def backward(self, x, G_x, logits, features_stft_disc_x, features_stft_disc_G_x, commit_loss, params, use_balancer=True):
+    def backward(self, x, G_x, logits, features_stft_disc_x, features_stft_disc_G_x, commit_loss, params, use_balancer=False):
         losses = self.get_losses(x, G_x, logits, features_stft_disc_x, features_stft_disc_G_x)
 
         if use_balancer:
