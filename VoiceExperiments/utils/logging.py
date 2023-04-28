@@ -34,33 +34,46 @@ class TensorBoardLogger:
     validation loss is less than the previous least less, then save the
     model state.
     """
-    def __init__(self, logging_cfg, best_valid_loss=float('inf'), model_cfg=None, training_cfg=None):
+    def __init__(self, logging_cfg, best_valid_loss=float('inf'), pipeline):
         self.best_valid_loss = best_valid_loss
-
-        self.root = logging_cfg["root"]
-        self.monitor = logging_cfg["monitor"]
-        self.negate_monitor = ("negate_monitor" in logging_cfg ) and logging_cfg["negate_monitor"]
-        self.save_every_n_epochs = logging_cfg["save_every_n_epochs"]
-        # self.save_every_n_steps = logging_cfg["save_every_n_steps"]
-        self.save_samples = logging_cfg["save_samples"]
-        self.scalars = logging_cfg["scalars"]
+        self.pipeline = pipeline
+        self.root = logging_cfg.root
+        self.monitor = logging_cfg.monitor
+        self.negate_monitor = ("negate_monitor" in logging_cfg ) and logging_cfg.negate_monitor
+        self.save_every_n_epochs = logging_cfg.save_every_n_epochs
+        # self.save_every_n_steps = logging_cfg.save_every_n_steps
+        self.save_samples = logging_cfg.save_samples
+        self.scalars = logging_cfg.scalars
         if "samples" in logging_cfg:
-            self.sample_saving = logging_cfg["samples"]
+            self.sample_saving = logging_cfg.samples
 
-        if not os.path.isdir(os.path.join(self.root, "checkpoints")):
-            os.makedirs(os.path.join(self.root, "checkpoints"))
+        checkpoints_dir = os.path.join(self.root, "checkpoints")
+        if not os.path.isdir(checkpoints_dir):
+            os.makedirs(checkpoints_dir)
+
+        configs_dir = os.path.join(self.root, "configs")
+        if not os.path.isdir(configs_dir):
+            os.makedirs(configs_dir)
+
+        for model_name, model_cfg in self.pipeline.model_cfgs:
+            with open(os.path.join(configs_dir, f'{model_name}_cfg.yml'), 'w') as outfile:
+                yaml.dump(model_cfg outfile, default_flow_style=False)
+
+        with open(os.path.join(configs_dir, f'pipeline_cfg.yml'), 'w') as outfile:
+                yaml.dump(self.pipeline.pipeline_cfg, outfile, default_flow_style=False)
+                
         if self.save_samples:
             # TODO
             raise NotImplementedError("Cannot save samples yet")
             os.makedirs(os.path.join(self.root, "samples"))
         self.writer = SummaryWriter(self.root)
 
-    def log_train(self, results, epoch, step, model):
+    def log_train(self, results, epoch, step):
         for scalar in self.scalars:
             self.writer.add_scalar(f"train/{scalar}", results[scalar], step)
 
 
-    def log_val(self, results, epoch, step, model):
+    def log_val(self, results, epoch, step):
         total_results = {scalar : 0  for scalar in self.scalars}
         total_monitor = 0
         for result in results:
@@ -79,11 +92,11 @@ class TensorBoardLogger:
             self.best_valid_loss = current_valid_loss
             print(f"\nBest validation loss: {self.best_valid_loss}")
             print(f"\nSaving best model for epoch: {epoch+1}\n")
-            path = os.path.join(self.root, "checkpoints/best.ckpt")
-            save_model(epoch, model, path)
-        
+
+            path = os.path.join(self.root, "checkpoints")
+            self.pipeline.save_models(path, 'best', epoch, step)
+
             if epoch % self.save_every_n_epochs == 0:
-                path = os.path.join(self.root, "checkpoints/last.ckpt")
-                save_model(epoch, model, path)
+                self.pipeline.save_models(path, 'last', epoch, step)
         
         

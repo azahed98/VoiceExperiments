@@ -12,13 +12,16 @@ setup(
     instal_requires=[
         'numpy',
         'scipy',
+        'tqdm',
         'librosa',
+        'pyyaml',
+        'easydict',
         'torchvision',
         'soundfile',
         'pytorch-lightning',
         'tensorboard',
         'vector-quantize-pytorch',
-        # 'encodec', # Required for EnCodec model
+        'git+https://git@github.com/facebookresearch/encodec#egg=encodec', # Required for EnCodec model
     ],
     python_requires='>3.7'
 )
