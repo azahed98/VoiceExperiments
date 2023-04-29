@@ -5,65 +5,61 @@ from torch.nn.utils import weight_norm
 
 from vector_quantize_pytorch import ResidualVQ
 
-from VoiceExperiments.models.base import get_optimizer
+from VoiceExperiments.pipelines.base import BasePipeline, get_optimizer
+from VoiceExperiments.models.SoundStream import *
 from VoiceExperiments.modules.SoundStream import *
 
-class SoundStream(nn.Module):
+class SoundStream(BasePipeline):
     # TODO: Add FiLM, add quantizer dropout
-    def __init__(self, model_config, optimizer_configs=None):
-        super(SoundStream, self).__init__()
+    def __init__(self, pipeline_cfg, optimizer_cfgs):
+        super(SoundStream, self).__init__(pipeline_cfg, optimizer_cfgs)
+        params = pipeline_cfg.params
 
-        params = model_config['params']
-
-        self.sr = params['sr']
+        self.sr = params.sr
         
-        C = params['C']
-        D = params['D']
-        n_q = params['n_q']
-        codebook_size = params['codebook_size']
+        C = params.C
+        D = params.D
+        n_q = params.n_q
+        codebook_size = params.codebook_size
 
-        W = params['W']
-        H = params['H']
+        W = params.W
+        H = params.H
 
-        LAMBDA_ADV = params['LAMBDA_ADV']
-        LAMBDA_FEAT = params['LAMBDA_FEAT']
-        LAMBDA_REC = params['LAMBDA_REC']
+        LAMBDA_ADV = params.LAMBDA_ADV
+        LAMBDA_FEAT = params.LAMBDA_FEAT
+        LAMBDA_REC = params.LAMBDA_REC
 
         # Generator
-        self.encoder = Encoder(C=C, D=D)
-        self.quantizer = ResidualVQ(
-            num_quantizers=n_q, dim=D, codebook_size=codebook_size,
-            kmeans_init=True, kmeans_iters=100, threshold_ema_dead_code=2
+        self.generator = SoundStreamGenerator(C, D, n_q)
+
+        # Descriminator
+        self.wave_disc = WaveDiscriminator(num_D=D, downsampling_factor=2)
+        self.stft_disc = STFTDiscriminator(C=C, F_bins=W//2)
+    
+        # Optimizers
+        self.optimizer_g = get_optimizer(optimizer_cfgs.gen)(
+            list(self.generator.parameters()),
+            **optimizer_cfgs.gen.kwargs
         )
-        self.decoder = Decoder(C=C, D=D)
 
-        if optimizer_configs:
-            # Descriminator
-            self.wave_disc = WaveDiscriminator(num_D=D, downsampling_factor=2)
-            self.stft_disc = STFTDiscriminator(C=C, F_bins=W//2)
+        self.optimizer_d = get_optimizer(optimizer_cfgs.descrim)(
+            list(self.wave_disc.parameters()) + list(self.stft_disc.parameters()),
+            **optimizer_cfgs.descrim.kwargs
+        )
+
+        # Define losses
+        self.criterion_g = lambda x, G_x, features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_wave, lengths_stft: LAMBDA_ADV*adversarial_g_loss(features_stft_disc_G_x, features_wave_disc_G_x, lengths_stft, lengths_wave) + LAMBDA_FEAT*feature_loss(features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_wave, lengths_stft) + LAMBDA_REC*spectral_reconstruction_loss(x, G_x, self.sr)
+        self.criterion_d = adversarial_d_loss
+
+        self.models = {
+            'SoundStream' : self.generator, 
+            'WaveDescriminator' : self.wave_disc, 
+            'STFTDescriminator' : self.stft_disc
+        }
         
-            # Optimizers
-            self.optimizer_g = get_optimizer(optimizer_configs["gen"])(
-                list(self.encoder.parameters()) + list(self.quantizer.parameters()) + list(self.decoder.parameters()),
-                **optimizer_configs["gen"]["kwargs"]
-            )
-
-            self.optimizer_d = get_optimizer(optimizer_configs["descrim"])(
-                list(self.wave_disc.parameters()) + list(self.stft_disc.parameters()),
-                **optimizer_configs["descrim"]["kwargs"]
-            )
-
-            # Define losses
-            self.criterion_g = lambda x, G_x, features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_wave, lengths_stft: LAMBDA_ADV*adversarial_g_loss(features_stft_disc_G_x, features_wave_disc_G_x, lengths_stft, lengths_wave) + LAMBDA_FEAT*feature_loss(features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_wave, lengths_stft) + LAMBDA_REC*spectral_reconstruction_loss(x, G_x, self.sr)
-            self.criterion_d = adversarial_d_loss
 
     def forward(self, x):
-        e = self.encoder(x) # (B, S, D)
-        e = torch.swapaxes(e, 1, 2) # (B, D, S)
-        quantized, _, _ = self.quantizer(e) # (B, D, S)
-        quantized = torch.swapaxes(quantized, 1, 2) # (B, S, D)
-        o = self.decoder(quantized) # (B, 1, T)
-        return o
+        return self.generator(x)
   
     def train_step(self, batch):
         self.train()

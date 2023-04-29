@@ -19,13 +19,13 @@ from VoiceExperiments.utils.logging import TensorBoardLogger, tensor_dict_to_num
 # TODO: Find appropriate place to integrate collate_fn
 #       may require writing custom replacement for ConcatDataset
 
-def collate_fn(batch):
-    audios = [i[0].T for i in batch]
-    # srs = [i[1] for i in batch]
-    lengths = torch.tensor([elem.shape[0] for elem in audios])
+# def collate_fn(batch):
+#     audios = [i[0].T for i in batch]
+#     # srs = [i[1] for i in batch]
+#     lengths = torch.tensor([elem.shape[0] for elem in audios])
     
-    # audios shape after padding: (batch, 1, L) the 1 is for num channels
-    return nn.utils.rnn.pad_sequence(audios, batch_first=True).permute(0, 2, 1), lengths
+#     # audios shape after padding: (batch, 1, L) the 1 is for num channels
+#     return nn.utils.rnn.pad_sequence(audios, batch_first=True).permute(0, 2, 1), lengths
 
 def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -46,8 +46,8 @@ def main(args):
 
     BATCH_SIZE = training_cfg.BATCH_SIZE
 
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, num_workers=args.workers)
-    valid_loader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, num_workers=args.workers)
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, collate_fn=train_dataset.collate_fn, num_workers=args.workers)
+    valid_loader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, collate_fn=valid_dataset.collate_fn, num_workers=args.workers)
     
     logger = TensorBoardLogger(training_cfg.logging, pipeline)
     clear_cache_every_n_steps = training_cfg.logging.clear_cache_every_n_steps
@@ -59,10 +59,10 @@ def main(args):
         pipeline.train()
         
         for batch in tqdm(train_loader):
-            results = model.train_step(batch)
+            results = pipeline.train_step(batch)
             del_tensors = (clear_cache_every_n_steps > 0) and (step % clear_cache_every_n_steps == 0)
             results = tensor_dict_to_numpy(results, del_tensors=del_tensors)
-            logger.log_train(results, epoch, step, model)
+            logger.log_train(results, epoch, step, pipeline)
             step += 1
         del_results(results)
         # Val
@@ -71,14 +71,14 @@ def main(args):
         val_results = []
         val_step = 0
         for batch in tqdm(valid_loader):
-            results = model.eval_step(batch)
+            results = pipeline.eval_step(batch)
             del_tensors = (clear_cache_every_n_steps > 0) and (val_step % clear_cache_every_n_steps == 0)
             results = tensor_dict_to_numpy(results, del_tensors=del_tensors)
             val_results.append(results)
 
             val_step += 1
         del_results(results)
-        logger.log_val(val_results, epoch, step, model)
+        logger.log_val(val_results, epoch, step, pipeline)
         
         epoch += 1
 

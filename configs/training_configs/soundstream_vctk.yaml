@@ -18,7 +18,8 @@ datasets:
     name: vctk
     val_split: 0.1
     kwargs:
-      root: '/media/arshzahed/2tb/dev/data/VCTK/Dataset/'
+      root: '/home/arsh/dev/data/VCTK/Dataset/'
+      download: True
 
 optimizers:
   gen:

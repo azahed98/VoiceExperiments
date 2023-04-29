@@ -1,5 +1,6 @@
 import os
 import torch
+import torch.optim as optim
 import yaml
 
 def save_model(epoch, step, model, path):
@@ -12,12 +13,20 @@ def save_model(epoch, step, model, path):
                 'model_state_dict': model.state_dict(),
                 }, f'{path}')
 
+def get_optimizer(opt_config):
+    type = opt_config["type"].lower()
+    
+    if type == 'adam':
+        return optim.Adam
+    
+    raise NotImplementedError(f"Optimizer {type} not found")
+
+
 class BasePipeline:
 
     # Models of pipeline with trainable parameters
     # Each model is saved with separate checkpoint by default
     models = None
-    model_cfgs = None
 
     def __init__(self, pipeline_cfg, optimizer_cfgs):
         self.pipeline_cfg = pipeline_cfg
@@ -46,7 +55,6 @@ class BasePipeline:
 
     def save_models(self, root, save_name, epoch=None, step=None):
         for model_name, model in self.models.items():
-            model_cfg = self.model_cfgs[model_name]
             model_path = os.path.join(root, model_name)
             if not os.path.isdir(model_path):
                 os.makedirs(model_path)

@@ -22,21 +22,23 @@ from encodec.model import EncodedFrame
 from encodec.msstftd import MultiScaleSTFTDiscriminator
 import encodec.modules as m
 
+from VoiceExperiments.pipelines.base import BasePipeline
 from VoiceExperiments.modules.EnCodec import EnCodecGenerativeLoss, adversarial_d_loss
 from VoiceExperiments.models.base import get_optimizer
 
-class EnCodec(nn.Module):
-    def __init__(self, model_config, optimizer_configs=None):
-        params = model_config["params"]
+class EnCodec(BasePipeline):
+    def __init__(self, pipeline_cfg, optimizer_cfgs=None):
+        super(EnCodec, self).__init__(self, pipeline_cfg, optimizer_cfg)
+        params = pipeline_cfg.params
 
-        target_bandwidths = params["target_bandwidths"]
-        sample_rate = params["sample_rate"]
-        channels = params["channels"]
-        causal = params["causal"]
-        model_norm = params["model_norm"]
-        audio_normalize = params["audio_normalize"]
-        segment = params["segment"]
-        name = params["name"]
+        target_bandwidths = params.target_bandwidths
+        sample_rate = params.sample_rate
+        channels = params.channels
+        causal = params.causal
+        model_norm = params.model_norm
+        audio_normalize = params.audio_normalize
+        segment = params.segment
+        name = params.name
         
         encoder = m.SEANetEncoder(channels=channels, norm=model_norm, causal=causal)
         decoder = m.SEANetDecoder(channels=channels, norm=model_norm, causal=causal)
@@ -61,7 +63,7 @@ class EnCodec(nn.Module):
         )
 
 
-        self.msstftd_descrim = MultiScaleSTFTDiscriminator(**model_config["MultiScaleSTFTDiscriminator"]) # TODO: need any special parsing of args
+        self.msstftd_descrim = MultiScaleSTFTDiscriminator(**pipeline_cfg.MultiScaleSTFTDiscriminator) # TODO: need any special parsing of args
         
         # TODO: Add layer at end of descrim for aggregating across freq domain
         # self.num_stft_descrim = len(self.msstftd_descrim.n_ffts) # number of sub-descrims
@@ -71,16 +73,21 @@ class EnCodec(nn.Module):
 
         self.gen_loss_fn = EnCodecGenerativeLoss(self.sample_rate)
 
-        self.optimizer_g = get_optimizer(optimizer_configs["gen"])(
+        self.optimizer_g = get_optimizer(optimizer_cfgs.gen)(
             list(self.encoder.parameters()) + list(self.quantizer.parameters()) + list(self.decoder.parameters()),
-            **optimizer_configs["gen"]["kwargs"]
+            **optimizer_cfgs.gen.kwargs
         )
 
-        self.optimizer_d = get_optimizer(optimizer_configs["descrim"])(
+        self.optimizer_d = get_optimizer(optimizer_cfgs.descrim)(
             list(self.msstftd_descrim.parameters()),
-            **optimizer_configs["descrim"]["kwargs"]
+            **optimizer_cfgs.descrim.kwargs
         )
         
+        self.models = {
+            "EnCodec" : self.encodec,
+            "Descriminator" : self.msstftd_descrim
+        }
+    
     def encode_verbose(self, x: torch.Tensor) -> tp.Tuple[tp.List[EncodedFrame], torch.Tensor]:
         """Identital to encode but uses forward of the quantizer instead of 
         encode, so as to get commitment loss for training

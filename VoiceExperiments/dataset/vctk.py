@@ -1,12 +1,25 @@
 import torch
+from torch import nn
 from torchaudio.datasets import VCTK_092
 
+def collate_fn(batch):
+    audios = [i[0].T for i in batch]
+    # srs = [i[1] for i in batch]
+    lengths = torch.tensor([elem.shape[0] for elem in audios])
+    
+    # audios shape after padding: (batch, 1, L) the 1 is for num channels
+    return nn.utils.rnn.pad_sequence(audios, batch_first=True).permute(0, 2, 1), lengths
 
 class VCTKDataset(VCTK_092):
-    @staticmethod
-    def collate_fn(batch):
-        # TODO: Update collate to make universal
-        audios = [i[0].T for i in batch]
-        # srs = [i[1] for i in batch]
-        lengths = torch.tensor([elem.shape[-1] for elem in audios])
-        return nn.utils.rnn.pad_sequence(audios, batch_first=True)[:,:, 0][:, None, :], lengths
+    def __init__(self, *args, **kwargs):
+        super(VCTKDataset, self).__init__(*args, **kwargs)
+
+        self.collate_fn = collate_fn
+        
+    # @staticmethod
+    # def collate_fn(batch):
+    #     # TODO: Update collate to make universal
+    #     audios = [i[0].T for i in batch]
+    #     # srs = [i[1] for i in batch]
+    #     lengths = torch.tensor([elem.shape[-1] for elem in audios])
+    #     return nn.utils.rnn.pad_sequence(audios, batch_first=True)[:,:, 0][:, None, :], lengths

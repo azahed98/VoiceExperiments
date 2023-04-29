@@ -2,7 +2,7 @@ import torch
 import os
 import gc
 
-# from yaml import Dump
+from yaml import Dump
 from torch.utils.tensorboard import SummaryWriter
 
 def save_model(epochs, model, path):
@@ -34,7 +34,7 @@ class TensorBoardLogger:
     validation loss is less than the previous least less, then save the
     model state.
     """
-    def __init__(self, logging_cfg, best_valid_loss=float('inf'), pipeline):
+    def __init__(self, logging_cfg, pipeline, best_valid_loss=float('inf')):
         self.best_valid_loss = best_valid_loss
         self.pipeline = pipeline
         self.root = logging_cfg.root
@@ -51,16 +51,16 @@ class TensorBoardLogger:
         if not os.path.isdir(checkpoints_dir):
             os.makedirs(checkpoints_dir)
 
-        configs_dir = os.path.join(self.root, "configs")
-        if not os.path.isdir(configs_dir):
-            os.makedirs(configs_dir)
+        # configs_dir = os.path.join(self.root, "configs")
+        # if not os.path.isdir(configs_dir):
+        #     os.makedirs(configs_dir)
 
-        for model_name, model_cfg in self.pipeline.model_cfgs:
-            with open(os.path.join(configs_dir, f'{model_name}_cfg.yml'), 'w') as outfile:
-                yaml.dump(model_cfg outfile, default_flow_style=False)
+        # for model_name, model_cfg in self.pipeline.model_cfgs:
+        #     with open(os.path.join(configs_dir, f'{model_name}_cfg.yml'), 'w') as outfile:
+        #         yaml.dump(model_cfg outfile, default_flow_style=False)
 
-        with open(os.path.join(configs_dir, f'pipeline_cfg.yml'), 'w') as outfile:
-                yaml.dump(self.pipeline.pipeline_cfg, outfile, default_flow_style=False)
+        with open(os.path.join(self.root, f'pipeline_cfg.yaml'), 'w') as outfile:
+                Dump(self.pipeline.pipeline_cfg, outfile, default_flow_style=False)
                 
         if self.save_samples:
             # TODO
