@@ -2,7 +2,7 @@ import torch
 import os
 import gc
 
-from yaml import Dump
+from yaml import dump
 from torch.utils.tensorboard import SummaryWriter
 
 def save_model(epochs, model, path):
@@ -60,7 +60,7 @@ class TensorBoardLogger:
         #         yaml.dump(model_cfg outfile, default_flow_style=False)
 
         with open(os.path.join(self.root, f'pipeline_cfg.yaml'), 'w') as outfile:
-                Dump(self.pipeline.pipeline_cfg, outfile, default_flow_style=False)
+                dump(self.pipeline.pipeline_cfg, outfile, default_flow_style=False)
                 
         if self.save_samples:
             # TODO

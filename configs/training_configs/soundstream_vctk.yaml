@@ -12,14 +12,13 @@ logging:
   samples:
     "x" : "audio"
     "G_x" : "audio"
-
-datasets:
-  - 
-    name: vctk
-    val_split: 0.1
-    kwargs:
-      root: '/home/arsh/dev/data/VCTK/Dataset/'
-      download: True
+  clear_cache_every_n_steps: 1
+dataset:
+  name: vctk
+  val_split: 0.1
+  kwargs:
+    root: '/home/arsh/dev/data/VCTK/Dataset/'
+    download: True
 
 optimizers:
   gen:

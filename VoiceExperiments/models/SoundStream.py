@@ -9,6 +9,7 @@ from VoiceExperiments.modules.SoundStream import *
 
 class SoundStreamGenerator(nn.Module):
     def __init__(self, C, D, n_q, codebook_size):
+        super().__init__()
         self.encoder = Encoder(C=C, D=D)
         self.quantizer = ResidualVQ(
             num_quantizers=n_q, dim=D, codebook_size=codebook_size,

@@ -28,9 +28,10 @@ class BasePipeline:
     # Each model is saved with separate checkpoint by default
     models = None
 
-    def __init__(self, pipeline_cfg, optimizer_cfgs):
+    def __init__(self, pipeline_cfg, optimizer_cfgs, device=None):
         self.pipeline_cfg = pipeline_cfg
         self.optimizer_cfgs = optimizer_cfgs
+        self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def train_step(self, batch):
         raise NotImplementedError()
@@ -39,17 +40,17 @@ class BasePipeline:
         raise NotImplementedError()
 
     def train(self):
-        for model in self.models:
+        for model in self.models.values():
             model.train()
 
     def eval(self):
-        for model in self.models:
+        for model in self.models.values():
             model.eval()
 
     def to(self, device):
-        for model in self.models:
+        for model in self.models.values():
             model.to(device)
-        
+    
     def compile(self):
         self.models = {name: torch.compile(model) for name, model in self.models.items()}
 

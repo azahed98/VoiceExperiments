@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 # from VoiceExperiments.models import get_model#, get_optimizer
 from VoiceExperiments.pipelines import get_pipeline
-from VoiceExperiments.dataset import get_datasets
+from VoiceExperiments.dataset import get_dataset
 from VoiceExperiments.utils.logging import TensorBoardLogger, tensor_dict_to_numpy, del_results
 
 # from torch.utils.tensorboard import SummaryWriter
@@ -34,11 +34,11 @@ def main(args):
         pipeline_cfg = edict(yaml.load(stream, Loader))
     with open(args.training_config, 'r') as stream:
         training_cfg = edict(yaml.load(stream, Loader))
-    train_dataset, valid_dataset = get_datasets(training_cfg.datasets)
+    train_dataset, valid_dataset, collate_fn = get_dataset(training_cfg.dataset)
 
-    logging.info("Loaded datasets")
+    logging.info("Loaded dataset")
     
-    opt_cfgs = training_cfg.optimizeros
+    opt_cfgs = training_cfg.optimizers
     pipeline = get_pipeline(pipeline_cfg, opt_cfgs)
     pipeline.to(device)
     if args.compile:
@@ -46,8 +46,8 @@ def main(args):
 
     BATCH_SIZE = training_cfg.BATCH_SIZE
 
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, collate_fn=train_dataset.collate_fn, num_workers=args.workers)
-    valid_loader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, collate_fn=valid_dataset.collate_fn, num_workers=args.workers)
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, num_workers=args.workers)
+    valid_loader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, num_workers=args.workers)
     
     logger = TensorBoardLogger(training_cfg.logging, pipeline)
     clear_cache_every_n_steps = training_cfg.logging.clear_cache_every_n_steps

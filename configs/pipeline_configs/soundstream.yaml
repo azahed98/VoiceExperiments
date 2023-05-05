@@ -1,4 +1,4 @@
-name: SoundStream
+pipeline: SoundStream
 params:
   sr: 48000
   C: 8 

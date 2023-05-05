@@ -30,7 +30,7 @@ class SoundStream(BasePipeline):
         LAMBDA_REC = params.LAMBDA_REC
 
         # Generator
-        self.generator = SoundStreamGenerator(C, D, n_q)
+        self.generator = SoundStreamGenerator(C, D, n_q, codebook_size)
 
         # Descriminator
         self.wave_disc = WaveDiscriminator(num_D=D, downsampling_factor=2)
@@ -64,7 +64,7 @@ class SoundStream(BasePipeline):
     def train_step(self, batch):
         self.train()
         x, lengths_x = batch
-        device = next(self.parameters()).device
+        device = self.device
 
         x = x.to(device)
         lengths_x = lengths_x.to(device)
@@ -116,7 +116,7 @@ class SoundStream(BasePipeline):
         self.eval()
 
         x, lengths_x = batch
-        device = next(self.parameters()).device
+        device = self.device
 
         x = x.to(device)
         lengths_x = lengths_x.to(device)
