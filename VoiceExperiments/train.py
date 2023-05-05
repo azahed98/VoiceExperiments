@@ -62,7 +62,7 @@ def main(args):
             results = pipeline.train_step(batch)
             del_tensors = (clear_cache_every_n_steps > 0) and (step % clear_cache_every_n_steps == 0)
             results = tensor_dict_to_numpy(results, del_tensors=del_tensors)
-            logger.log_train(results, epoch, step, pipeline)
+            logger.log_train(results, epoch, step)
             step += 1
         del_results(results)
         # Val
@@ -78,7 +78,7 @@ def main(args):
 
             val_step += 1
         del_results(results)
-        logger.log_val(val_results, epoch, step, pipeline)
+        logger.log_val(val_results, epoch, step)
         
         epoch += 1
 
