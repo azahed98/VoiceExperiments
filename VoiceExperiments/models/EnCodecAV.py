@@ -17,8 +17,8 @@ from torch import nn
 
 from encodec import EncodecModel
 
-class EnCodecAV(EncodecMdoel):
-    def __init__(self, model_config, optimizer_configs):
+class EnCodecAV(nn.Module):
+    def __init__(self, ):
 
 
         super(EnCodecAV, self).__init__()

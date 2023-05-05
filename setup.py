@@ -10,15 +10,19 @@ setup(
     description='A set of data processing, model training, and inference tools for voice experiments',
     author='Arsh Zahed',
     instal_requires=[
-        'numpy',
-        'scipy',
+        'easydict',
         'librosa',
-        'torchvision',
+        'numpy',
+        'pyyaml',
+        'scipy',
         'soundfile',
-        'pytorch-lightning',
         'tensorboard',
+        'torch',
+        'torchaudio',
+        'torchvision',
+        'tqdm',
         'vector-quantize-pytorch',
-        # 'encodec', # Required for EnCodec model
+        'git+https://git@github.com/facebookresearch/encodec#egg=encodec', # Required for EnCodec model
     ],
     python_requires='>3.7'
 )

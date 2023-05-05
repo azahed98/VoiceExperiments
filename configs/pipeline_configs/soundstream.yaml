@@ -1,0 +1,12 @@
+pipeline: SoundStream
+params:
+  sr: 48000
+  C: 8 
+  D: 8 
+  n_q: 4 
+  codebook_size: 32
+  W: 1024
+  H: 256
+  LAMBDA_ADV: 1
+  LAMBDA_FEAT: 100
+  LAMBDA_REC: 1
