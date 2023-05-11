@@ -29,7 +29,7 @@ from VoiceExperiments.utils.logging import TensorBoardLogger, tensor_dict_to_num
 
 def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    
     with open(args.pipeline_config, 'r') as stream:
         pipeline_cfg = edict(yaml.load(stream, Loader))
     with open(args.training_config, 'r') as stream:
@@ -51,6 +51,9 @@ def main(args):
     
     logger = TensorBoardLogger(training_cfg.logging, pipeline)
     clear_cache_every_n_steps = training_cfg.logging.clear_cache_every_n_steps
+
+    # Creates a GradScaler once at the beginning of training.
+    # scaler = GradScaler()
 
     epoch = 0
     step = 0
@@ -88,7 +91,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--pipeline_config', type=str)
     parser.add_argument('--training_config', type=str)
-    parser.add_argument('--workers', type=int, default=2)
+    parser.add_argument('--workers', type=int, default=1)
     parser.add_argument('--compile', action="store_true")
 
     args = parser.parse_args()

@@ -16,6 +16,9 @@ import typing as tp
 import numpy as np
 from torch import nn
 
+from torch import autocast
+from torch.cuda.amp import GradScaler
+
 from encodec import EncodecModel
 from encodec import quantization as qt
 from encodec.model import EncodedFrame
@@ -28,11 +31,12 @@ from VoiceExperiments.models.base import get_optimizer
 
 class EnCodec(BasePipeline):
     def __init__(self, pipeline_cfg, optimizer_cfgs=None):
-        super(EnCodec, self).__init__(self, pipeline_cfg, optimizer_cfg)
+        super(EnCodec, self).__init__(pipeline_cfg, optimizer_cfgs)
         params = pipeline_cfg.params
 
         target_bandwidths = params.target_bandwidths
         sample_rate = params.sample_rate
+        self.sample_rate = sample_rate
         channels = params.channels
         causal = params.causal
         model_norm = params.model_norm
@@ -50,7 +54,7 @@ class EnCodec(BasePipeline):
             bins=1024,
         )
 
-        self.encodec = EnCodecModel(
+        self.encodec = EncodecModel(
             encoder,
             decoder,
             quantizer,
@@ -74,7 +78,7 @@ class EnCodec(BasePipeline):
         self.gen_loss_fn = EnCodecGenerativeLoss(self.sample_rate)
 
         self.optimizer_g = get_optimizer(optimizer_cfgs.gen)(
-            list(self.encoder.parameters()) + list(self.quantizer.parameters()) + list(self.decoder.parameters()),
+            list(self.encodec.parameters()),
             **optimizer_cfgs.gen.kwargs
         )
 
@@ -142,7 +146,7 @@ class EnCodec(BasePipeline):
     def train_step(self, batch):
         self.train()
         x, lengths_x = batch
-        device = next(self.parameters()).device
+        device = self.device
 
         x = x.to(device)
         lengths_x = lengths_x.to(device)
@@ -165,7 +169,7 @@ class EnCodec(BasePipeline):
             features_stft_disc_x, 
             features_stft_disc_G_x, 
             commit_loss,
-            list(self.parameters())
+            list(self.encodec.parameters()) + list(self.msstftd_descrim.parameters())
         )
         self.optimizer_g.step()
         
@@ -185,9 +189,9 @@ class EnCodec(BasePipeline):
         return losses
         
     def eval_step(self, batch):
-        self.train()
+        self.eval()
         x, lengths_x = batch
-        device = next(self.parameters()).device
+        device = self.device
 
         x = x.to(device)
         lengths_x = lengths_x.to(device)

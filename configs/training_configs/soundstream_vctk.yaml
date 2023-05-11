@@ -1,4 +1,4 @@
-BATCH_SIZE: 2
+BATCH_SIZE: 6
 max_epochs: -1 # -1 for no end
 
 logging:
@@ -16,8 +16,9 @@ logging:
 dataset:
   name: vctk
   val_split: 0.1
+  audio_len: 144000
   kwargs:
-    root: '/home/arsh/dev/data/VCTK/Dataset/'
+    root: '/media/arshzahed/2tb/dev/data/VCTK/Dataset/'
     download: True
 
 optimizers:

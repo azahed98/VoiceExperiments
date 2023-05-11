@@ -30,7 +30,9 @@ class BasePipeline:
 
     def __init__(self, pipeline_cfg, optimizer_cfgs, device=None):
         self.pipeline_cfg = pipeline_cfg
+        
         self.optimizer_cfgs = optimizer_cfgs
+        
         self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def train_step(self, batch):

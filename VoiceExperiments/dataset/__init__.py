@@ -47,6 +47,6 @@ def _get_dataset(config):
     name = config['name'].lower()
 
     if name == 'vctk':
-        return VCTKDataset(**config['kwargs'])
+        return VCTKDataset(audio_len=config['audio_len'], **config['kwargs'])
 
     raise NotImplementedError(f'Dataset {name} not found')

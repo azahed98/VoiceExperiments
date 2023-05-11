@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import weight_norm
 
+from torch import autocast
+# from torch.cuda.amp import GradScaler
+
 from vector_quantize_pytorch import ResidualVQ
 
 from VoiceExperiments.pipelines.base import BasePipeline, get_optimizer
@@ -57,6 +60,7 @@ class SoundStream(BasePipeline):
             'STFTDescriminator' : self.stft_disc
         }
         
+        # self.scaler = GradScaler()
 
     def forward(self, x):
         return self.generator(x)
@@ -69,39 +73,41 @@ class SoundStream(BasePipeline):
         x = x.to(device)
         lengths_x = lengths_x.to(device)
 
-        G_x = self.forward(x)
+        with autocast(device_type='cuda', dtype=torch.bfloat16):
+            G_x = self.forward(x)
 
-        s_x = torch.view_as_real(torch.stft(x.squeeze(), n_fft=1024, hop_length=256, window=torch.hann_window(window_length=1024, device=device), return_complex=True)).permute(0, 3, 1, 2)
-        lengths_s_x = 1 + torch.div(lengths_x, 256, rounding_mode="floor")
-        s_G_x = torch.view_as_real(torch.stft(G_x.squeeze(), n_fft=1024, hop_length=256, window=torch.hann_window(window_length=1024, device=device), return_complex=True)).permute(0, 3, 1, 2)
+            s_x = torch.view_as_real(torch.stft(x.squeeze(), n_fft=1024, hop_length=256, window=torch.hann_window(window_length=1024, device=device), return_complex=True)).permute(0, 3, 1, 2)
+            lengths_s_x = 1 + torch.div(lengths_x, 256, rounding_mode="floor")
+            s_G_x = torch.view_as_real(torch.stft(G_x.squeeze(), n_fft=1024, hop_length=256, window=torch.hann_window(window_length=1024, device=device), return_complex=True)).permute(0, 3, 1, 2)
+            
+            lengths_stft = self.stft_disc.features_lengths(lengths_s_x)
+            lengths_wave = self.wave_disc.features_lengths(lengths_x)
         
-        lengths_stft = self.stft_disc.features_lengths(lengths_s_x)
-        lengths_wave = self.wave_disc.features_lengths(lengths_x)
-    
 
-        # TODO: shape hacking
-        G_x = G_x[:, :, :x.shape[2]]
-        s_G_x = s_G_x[:, :, :, :s_x.shape[3]]
+            # TODO: shape hacking
+            G_x = G_x[:, :, :x.shape[2]]
+            s_G_x = s_G_x[:, :, :, :s_x.shape[3]]
 
-        features_stft_disc_x = self.stft_disc(s_x)
-        features_wave_disc_x = self.wave_disc(x)
-        
-        features_stft_disc_G_x = self.stft_disc(s_G_x)
-        features_wave_disc_G_x = self.wave_disc(G_x)
+            features_stft_disc_x = self.stft_disc(s_x)
+            features_wave_disc_x = self.wave_disc(x)
+            
+            features_stft_disc_G_x = self.stft_disc(s_G_x)
+            features_wave_disc_G_x = self.wave_disc(G_x)
 
-        loss_g = self.criterion_g(x, G_x, features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_wave, lengths_stft)
-        
+            loss_g = self.criterion_g(x, G_x, features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x, features_wave_disc_G_x, lengths_wave, lengths_stft)
+            
         self.optimizer_g.zero_grad()
         loss_g.backward()
         self.optimizer_g.step()
 
-        features_stft_disc_x = self.stft_disc(s_x)
-        features_wave_disc_x = self.wave_disc(x)
-        
-        features_stft_disc_G_x_det = self.stft_disc(s_G_x.detach())
-        features_wave_disc_G_x_det = self.wave_disc(G_x.detach())
-        
-        loss_d = self.criterion_d(features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x_det, features_wave_disc_G_x_det, lengths_stft, lengths_wave)
+        with autocast(device_type='cuda', dtype=torch.bfloat16):
+            features_stft_disc_x = self.stft_disc(s_x)
+            features_wave_disc_x = self.wave_disc(x)
+            
+            features_stft_disc_G_x_det = self.stft_disc(s_G_x.detach())
+            features_wave_disc_G_x_det = self.wave_disc(G_x.detach())
+            
+            loss_d = self.criterion_d(features_stft_disc_x, features_wave_disc_x, features_stft_disc_G_x_det, features_wave_disc_G_x_det, lengths_stft, lengths_wave)
       
         self.optimizer_d.zero_grad()
         loss_d.backward()
@@ -110,7 +116,7 @@ class SoundStream(BasePipeline):
         # print(torch.cuda.memory_summary())
         # assert False
 
-        return {"Loss_G": loss_g, "Loss_D": loss_d, "G_x": G_x}
+        return {"Loss_G": loss_g.to(torch.float32), "Loss_D": loss_d.to(torch.float32), "G_x": G_x.to(torch.float32)}
     
     def eval_step(self, batch):
         self.eval()
