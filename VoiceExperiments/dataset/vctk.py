@@ -19,11 +19,11 @@ class VCTKDataset(VCTK_092):
         self.collate_fn = collate_fn
         
     def _load_audio(self, file_path):
-        audio = super(VCTKDataset, self)._load_audio(file_path)
+        audio, sr = super(VCTKDataset, self)._load_audio(file_path)
         if self.audio_len and len(audio) > self.audio_len:
             start = random.randrange(len(audio) - self.audio_len)
             audio = audio[start:start + self.audio_len]
-        return audio
+        return audio, sr
     # @staticmethod
     # def collate_fn(batch):
     #     # TODO: Update collate to make universal

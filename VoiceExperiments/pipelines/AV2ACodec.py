@@ -24,14 +24,18 @@ from encodec import quantization as qt
 from encodec.model import EncodedFrame
 from encodec.msstftd import MultiScaleSTFTDiscriminator
 import encodec.modules as m
+from fairseq import checkpoint_utils
 
 from VoiceExperiments.pipelines.base import BasePipeline
 from VoiceExperiments.modules.EnCodec import EnCodecGenerativeLoss, adversarial_d_loss
 from VoiceExperiments.models.base import get_optimizer
 
-class EnCodec(BasePipeline):
+from VoiceExperiments.submodules.av_hubert.avhubert.hubert import *
+from VoiceExperiments.submodules.av_hubert.avhubert.hubert_pretraining import *
+
+class AV2ACodec(BasePipeline):
     def __init__(self, pipeline_cfg, optimizer_cfgs=None):
-        super(EnCodec, self).__init__(pipeline_cfg, optimizer_cfgs)
+        super(AV2ACodec, self).__init__(pipeline_cfg, optimizer_cfgs)
         params = pipeline_cfg.params
 
         target_bandwidths = params.target_bandwidths
@@ -44,6 +48,9 @@ class EnCodec(BasePipeline):
         segment = params.segment
         name = params.name
         
+        models, saved_cfg, task = checkpoint_utils.load_model_ensemble_and_task([params.avhubert_ckpt_path])
+        self.avhubert = models[0]
+
         # encoder = m.SEANetEncoder(channels=channels, norm=model_norm, causal=causal)
         # decoder = m.SEANetDecoder(channels=channels, norm=model_norm, causal=causal)
 
@@ -88,10 +95,10 @@ class EnCodec(BasePipeline):
         )
         
         self.models = {
+            "AVHubert": self.avhubert,
             # "EnCodec" : self.encodec,
             # "Descriminator" : self.msstftd_descrim
         }
-    
     
     def gen_step(self, x, lengths_x):
         pass
@@ -105,12 +112,16 @@ class EnCodec(BasePipeline):
         x = x.to(device)
         lengths_x = lengths_x.to(device)
 
-        self.optimizer_g.zero_grad()
-        self.optimizer_d.zero_grad()
+        # self.optimizer_g.zero_grad()
+        # self.optimizer_d.zero_grad()
 
         losses = {}
 
-        return losses
+        # print(cfg.audio_feat_dim)
+        feature, _ = self.avhubert.extract_features(source={'audio': x, 'video': None})
+        print(feature[0].shape, feature[1].shape)
+        assert False
+        return losses   
         
     def eval_step(self, batch):
         self.eval()

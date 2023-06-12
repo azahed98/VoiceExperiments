@@ -1,0 +1,3 @@
+[submodule "VoiceExperiments/submodules/av_hubert"]
+	path = VoiceExperiments/submodules/av_hubert
+	url = git@github.com:facebookresearch/av_hubert.git
