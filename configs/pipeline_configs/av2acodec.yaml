@@ -1,0 +1,18 @@
+pipeline: AV2ACodec
+params:
+  avhubert_ckpt_path: '/media/arshzahed/2tb/dev/models/av_hubert/large_vox_iter5.pt'
+  target_bandwidths:
+    - 3.0
+    - 6.0
+    - 12.0
+    - 24.0
+  sample_rate: 24000
+  channels: 1
+  causal: True
+  model_norm: 'weight_norm'
+  audio_normalize: False
+  segment: null
+  name: 'unset'
+
+MultiScaleSTFTDiscriminator:
+  filters: 32

@@ -1,0 +1,18 @@
+pipeline: EnCodec
+
+params:
+  target_bandwidths:
+    - 3.0
+    - 6.0
+    - 12.0
+    - 24.0
+  sample_rate: 24000
+  channels: 1
+  causal: True
+  model_norm: 'weight_norm'
+  audio_normalize: False
+  segment: null
+  name: 'unset'
+
+MultiScaleSTFTDiscriminator:
+  filters: 32
